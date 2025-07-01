@@ -129,7 +129,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
   if (!date) {
     return {
-      title: "Invalid Date - RSS Reader",
+      title: "Invalid Date - WFeed",
       description: "The requested date is invalid.",
     }
   }
@@ -139,7 +139,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const formattedDate = format(date, "MMMM d, yyyy")
   const dateStr = formatDateForDb(date)
 
-  const title = `News for ${formattedDate} - RSS Reader`
+  const title = `News for ${formattedDate} - WFeed`
   const description = `Latest news and articles from top sources for ${formattedDate}. ${posts.length} articles from ${topSources
     .map((s: any) => s.title)
     .slice(0, 3)
@@ -156,7 +156,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       type: "website",
       url: `/date/${dateParam}/posts`,
-      siteName: "RSS Reader",
+      siteName: "WFeed",
       images: [
         {
           url: "/og-image.png",
@@ -205,7 +205,7 @@ export default async function DatePostsPage({ params }: PageProps) {
   return (
     <>
       <PublicNavbar />
-      <div className="pt-20 pb-8 px-4 max-w-6xl mx-auto">
+      <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
@@ -258,7 +258,7 @@ export default async function DatePostsPage({ params }: PageProps) {
             </p>
           </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-6">
             {posts.map((post) => (
               <PublicPostCard key={post.id} post={post} />
             ))}
@@ -288,7 +288,7 @@ export default async function DatePostsPage({ params }: PageProps) {
             datePublished: formatDateForDb(date),
             publisher: {
               "@type": "Organization",
-              name: "RSS Reader",
+              name: "WFeed",
               url: "/",
             },
             mainEntity: {

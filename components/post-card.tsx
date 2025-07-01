@@ -2,7 +2,7 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState} from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,95 +22,23 @@ import {
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 
-interface Post {
-  id: string
-  title: string
-  content?: string
-  summary?: string
-  url: string
-  author?: string
-  publishedAt: string
-  imageUrl?: string
-  source: {
-    title: string
-    iconUrl?: string
-    websiteUrl?: string
-  }
-}
+import { Post } from "@/lib/types"
 
 interface PostCardProps {
   post: Post
   sourceId?: string
   isSaved?: boolean
-  onSaveToggle?: (postId: string, isSaved: boolean) => void
-  onFollowStatusChange?: () => void
 }
 
-type FollowStatus = "see_first" | "normal" | "see_less" | "not_following"
-
-export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFollowStatusChange }: PostCardProps) {
+export function PostCard({ post, sourceId, isSaved = false }: PostCardProps) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(isSaved)
+  const [saved, setSaved] = useState(isSaved || post.isSaved || false)
   const [copySuccess, setCopySuccess] = useState(false)
-  const [followStatus, setFollowStatus] = useState<FollowStatus>("not_following")
+  const [followStatus, setFollowStatus] = useState<string>(post.source.priority || "not_following")
   const [followLoading, setFollowLoading] = useState(false)
-  const [actualSourceId, setActualSourceId] = useState<string | null>(sourceId || null)
-  const [statusLoaded, setStatusLoaded] = useState(false)
+  const [actualSourceId, setActualSourceId] = useState<string | null>(post.source.id || null)
   const timeAgo = formatDistanceToNow(new Date(post.publishedAt), { addSuffix: true })
-
-  useEffect(() => {
-    loadFollowStatus()
-  }, [post.source.title])
-
-  const loadFollowStatus = async () => {
-    try {
-      // First, get or find the source ID
-      let currentSourceId = actualSourceId
-
-      if (!currentSourceId) {
-        // Try to find source by matching the post's source title
-        const response = await fetch("/api/sources/find", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            feedId: `feed/${post.source.title}`,
-            title: post.source.title,
-            website: post.source.websiteUrl,
-            iconUrl: post.source.iconUrl,
-          }),
-        })
-
-        if (response.ok) {
-          const data = await response.json()
-          currentSourceId = data.sourceId
-          setActualSourceId(currentSourceId)
-          console.log(`🔍 Found source ID: ${currentSourceId} for ${post.source.title}`)
-        } else {
-          console.error("❌ Failed to find source ID")
-          return
-        }
-      }
-
-      if (currentSourceId) {
-        // Get the follow status
-        const response = await fetch(`/api/sources/${currentSourceId}`)
-        if (response.ok) {
-          const data = await response.json()
-          const newStatus = data.source.isFollowing ? data.source.priority || "normal" : "not_following"
-
-          console.log(`📊 Follow status for ${post.source.title}: ${newStatus}`)
-          setFollowStatus(newStatus)
-        } else {
-          console.error("❌ Failed to get source details")
-        }
-      }
-    } catch (error) {
-      console.error("❌ Error loading follow status:", error)
-    } finally {
-      setStatusLoaded(true)
-    }
-  }
 
   const handleSourceClick = async () => {
     if (actualSourceId) {
@@ -161,34 +89,26 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
         if (response.ok) {
           console.log("✅ Unfollowed successfully")
           setFollowStatus("not_following")
-          onFollowStatusChange?.()
         } else {
           const errorData = await response.json().catch(() => ({}))
           console.error("❌ Failed to unfollow:", errorData)
         }
       } else {
-        // Follow with the new priority - need to use the subscription API correctly
-        console.log(`🔄 Following with priority: ${action}`)
-
-        // First, get the source details to make sure we have all required data
-        const sourceResponse = await fetch(`/api/sources/${actualSourceId}`)
-        if (!sourceResponse.ok) {
-          console.error("❌ Failed to get source details")
+        // Use post.source data directly for subscription
+        const feedId = post.source.websiteUrl ? `feed/${post.source.websiteUrl}` : null
+        if (!feedId) {
+          console.error("❌ No valid feedId for subscription from post.source")
           return
         }
-
-        const sourceData = await sourceResponse.json()
-        const source = sourceData.source
-
         const response = await fetch("/api/subscriptions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            feedId: source.feedlyId || `feed/${source.feedUrl}`,
-            title: source.title,
-            description: source.description || "",
-            website: source.websiteUrl,
-            iconUrl: source.iconUrl,
+            feedId,
+            title: post.source.title,
+            description: "",
+            website: post.source.websiteUrl,
+            iconUrl: post.source.iconUrl,
             priority: action,
           }),
         })
@@ -196,7 +116,6 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
         if (response.ok) {
           console.log(`✅ Follow status updated to: ${action}`)
           setFollowStatus(action)
-          onFollowStatusChange?.()
         } else {
           const errorData = await response.json().catch(() => ({}))
           console.error("❌ Failed to update follow status:", errorData)
@@ -221,7 +140,6 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
       if (response.ok) {
         const newSavedState = !saved
         setSaved(newSavedState)
-        onSaveToggle?.(post.id, newSavedState)
       }
     } catch (error) {
       console.error("Error saving post:", error)
@@ -259,9 +177,7 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
     }
   }
 
-  const getFollowOptionStyle = (option: FollowStatus) => {
-    if (!statusLoaded) return "text-gray-400" // Loading state
-
+  const getFollowOptionStyle = (option: string) => {
     if (followStatus === option) {
       switch (option) {
         case "see_first":
@@ -277,7 +193,7 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
     return "text-gray-700"
   }
 
-  const getFollowOptionText = (option: FollowStatus) => {
+  const getFollowOptionText = (option: string) => {
     if (followStatus === option) {
       switch (option) {
         case "see_first":
@@ -344,21 +260,21 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle, onFoll
               <DropdownMenuItem
                 onClick={() => handleFollowAction("see_first")}
                 className={`cursor-pointer ${getFollowOptionStyle("see_first")}`}
-                disabled={followLoading || !statusLoaded}
+                disabled={followLoading}
               >
                 {followLoading ? "..." : getFollowOptionText("see_first")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleFollowAction("normal")}
                 className={`cursor-pointer ${getFollowOptionStyle("normal")}`}
-                disabled={followLoading || !statusLoaded}
+                disabled={followLoading}
               >
                 {followLoading ? "..." : getFollowOptionText("normal")}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => handleFollowAction("see_less")}
                 className={`cursor-pointer ${getFollowOptionStyle("see_less")}`}
-                disabled={followLoading || !statusLoaded}
+                disabled={followLoading}
               >
                 {followLoading ? "..." : getFollowOptionText("see_less")}
               </DropdownMenuItem>

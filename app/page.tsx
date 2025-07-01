@@ -19,10 +19,8 @@ export default async function HomePage() {
   const todayFormatted = format(today, "dd-MM-yyyy")
 
   if (isAuthenticated) {
-    // Authenticated users go to their personalized feed
     redirect("/feed")
   } else {
-    // Unauthenticated users go to public date posts
     redirect(`/date/${todayFormatted}/posts`)
   }
 }

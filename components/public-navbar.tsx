@@ -12,8 +12,8 @@ export function PublicNavbar() {
           </Link>
 
           <div className="flex items-center space-x-4">
-            <Link href="/register">
-              <Button variant="outline">Register</Button>
+            <Link href="/search">
+              <Button variant="outline" aria-label="Search other sources">Search</Button>
             </Link>
           </div>
         </div>

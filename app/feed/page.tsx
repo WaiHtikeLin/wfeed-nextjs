@@ -8,22 +8,7 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw, Rss } from "lucide-react"
 import { useInView } from "react-intersection-observer"
 import { useHomeStore } from "@/lib/store"
-
-interface Post {
-  id: string
-  title: string
-  content?: string
-  summary?: string
-  url: string
-  author?: string
-  publishedAt: string
-  imageUrl?: string
-  source: {
-    title: string
-    iconUrl?: string
-    websiteUrl?: string
-  }
-}
+import type { Post } from "@/lib/types"
 
 export default function FeedPage() {
   const {
@@ -34,39 +19,21 @@ export default function FeedPage() {
     addPosts,
     setPage,
     setHasMore,
-    resetPosts,
-    shouldRefreshData,
-    setFollowStatusVersion,
-    followStatusVersion,
+    resetPosts
   } = useHomeStore()
 
   const [loading, setLoading] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState("")
-  const [followStatusChanged, setFollowStatusChanged] = useState(0)
+  // maxPublishedAt is always updated from every response
+  // anchorDate is set from the first page's maxPublishedAt and never changes after
+  const [maxPublishedAt, setMaxPublishedAt] = useState<string | null>(null)
+  const [anchorDate, setAnchorDate] = useState<string | null>(null)
 
   const { ref, inView } = useInView({
     threshold: 0,
     rootMargin: "100px",
   })
-
-  // Load posts on mount or when follow status changes
-  useEffect(() => {
-    if (shouldRefreshData() || followStatusChanged > followStatusVersion) {
-      console.log("🔄 Loading fresh posts (initial load or follow status changed)")
-      loadPosts(1, true)
-      setFollowStatusVersion(followStatusChanged)
-     } 
-  }, [followStatusChanged])
-
-  // Infinite scroll
-  useEffect(() => {
-    if (inView && hasMore && !loadingMore && !loading && posts.length > 0) {
-      const nextPage = page + 1
-      console.log(`📄 Loading more posts - Page ${nextPage}`)
-      loadPosts(nextPage)
-    }
-  }, [inView, hasMore, loadingMore, loading, page, posts.length])
 
   const loadPosts = useCallback(
     async (pageNum: number, reset = false) => {
@@ -82,8 +49,13 @@ export default function FeedPage() {
 
         setError("")
 
+        let url = `/api/posts?page=${pageNum}&limit=10`
+        if (pageNum > 1 && anchorDate && maxPublishedAt) {
+          url += `&anchorDate=${encodeURIComponent(anchorDate)}&maxDate=${encodeURIComponent(maxPublishedAt)}`
+        }
+
         console.log(`📡 Fetching posts - Page ${pageNum}`)
-        const response = await fetch(`/api/posts?page=${pageNum}&limit=10`, {
+        const response = await fetch(url, {
           cache: "no-store",
           headers: {
             "Cache-Control": "no-cache",
@@ -93,18 +65,22 @@ export default function FeedPage() {
         if (response.ok) {
           const data = await response.json()
           const newPosts = data.posts || []
+          const newMaxPublishedAt = data.maxPublishedAt || null
 
           console.log(`✅ Received ${newPosts.length} posts`)
 
           if (reset || pageNum === 1) {
             setPosts(newPosts)
             setPage(1)
+            setMaxPublishedAt(newMaxPublishedAt)
+            setAnchorDate(newMaxPublishedAt) // anchorDate is set from first page's maxPublishedAt
           } else {
             addPosts(newPosts)
             setPage(pageNum)
+            setMaxPublishedAt(newMaxPublishedAt)
           }
 
-          setHasMore(newPosts.length === 10)
+          setHasMore(newPosts.length >= 10)
         } else {
           console.error("❌ Failed to fetch posts:", response.status)
           setError("Failed to load posts. Please try again.")
@@ -117,22 +93,31 @@ export default function FeedPage() {
         setLoadingMore(false)
       }
     },
-    [setPosts, addPosts, setPage, setHasMore],
+    [setPosts, addPosts, setPage, setHasMore, maxPublishedAt, anchorDate, posts],
   )
+
+  useEffect(() => {
+    loadPosts(1, true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Infinite scroll
+  useEffect(() => {
+    if (inView && hasMore && !loadingMore && !loading && posts.length > 0) {
+      const nextPage = page + 1
+      loadPosts(nextPage, false)
+    }
+  }, [inView, hasMore, loadingMore, loading, page, posts.length, anchorDate, loadPosts])
+
+  // Optionally, you can add a polling or button to fetch new posts using:
+  // loadPosts(1, false, 'newer')
 
   const handleRefresh = () => {
     console.log("🔄 Manual refresh triggered")
     resetPosts()
+    setAnchorDate(null)
+    setMaxPublishedAt(null)
     loadPosts(1, true)
-  }
-
-  const handleFollowStatusChange = () => {
-    console.log("🔄 Follow status changed, will refresh on next load")
-    setFollowStatusChanged((prev) => prev + 1)
-  }
-
-  const handleSaveToggle = (postId: string, isSaved: boolean) => {
-    console.log(`💾 Post ${postId} ${isSaved ? "saved" : "unsaved"}`)
   }
 
   if (loading && posts.length === 0) {
@@ -192,9 +177,7 @@ export default function FeedPage() {
         {posts.map((post) => (
           <PostCard
             key={post.id}
-            post={post}
-            onSaveToggle={handleSaveToggle}
-            onFollowStatusChange={handleFollowStatusChange}
+            post={post as Post}
           />
         ))}
       </div>

@@ -7,7 +7,11 @@ import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/hooks/use-auth"
 import { Loader2 } from "lucide-react"
 
-const publicRoutes = ["/login", "/register"]
+const publicRoutes = [
+  "/login",
+  "/register",
+  /^\/date\/[^/]+\/posts$/
+]
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
@@ -16,7 +20,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!loading) {
-      const isPublicRoute = publicRoutes.includes(pathname)
+      const isPublicRoute = publicRoutes.some((route) =>
+        typeof route === "string" ? route === pathname : route.test(pathname)
+      )
 
       if (!user && !isPublicRoute) {
         router.push("/login")

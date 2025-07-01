@@ -48,6 +48,41 @@ export async function POST(request: NextRequest) {
           iconUrl || null, // Convert undefined to null
         ],
       )
+
+      // Fetch posts for the new source
+      try {
+        const { parseRSSFeed, extractImageFromContent } = await import("@/lib/rss-parser")
+        const feed = await parseRSSFeed(actualFeedUrl)
+        if (feed && feed.items && feed.items.length > 0) {
+          for (const item of feed.items) {
+            // Check if post exists
+            const [existingPosts] = await db.execute(
+              "SELECT id FROM posts WHERE url = ? AND source_id = ?",
+              [item.link, sourceId]
+            )
+            if (Array.isArray(existingPosts) && existingPosts.length > 0) continue
+            const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
+            const imageUrl = item.content ? extractImageFromContent(item.content) : null
+            await db.execute(
+              `INSERT INTO posts (id, source_id, title, content, summary, url, author, published_at, image_url)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                uuidv4(),
+                sourceId,
+                item.title,
+                item.content,
+                item.description || null,
+                item.link,
+                item.author || null,
+                publishedAt,
+                imageUrl,
+              ]
+            )
+          }
+        }
+      } catch (fetchErr) {
+        console.error("Error fetching posts for new source:", fetchErr)
+      }
     }
 
     return NextResponse.json({ sourceId })

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
@@ -23,7 +23,11 @@ function formatDateForUrl(date: Date): string {
 }
 
 export function DateNavigation({ currentDate, previousDate, nextDate, isToday, isFuture }: DateNavigationProps) {
-  const [customDate, setCustomDate] = useState("")
+  const [customDate, setCustomDate] = useState<string>(format(currentDate, "yyyy-MM-dd"))
+
+  useEffect(() => {
+    setCustomDate(format(currentDate, "yyyy-MM-dd"))
+  }, [currentDate])
 
   const handleDateSubmit = (e: React.FormEvent) => {
     e.preventDefault()

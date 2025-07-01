@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ExternalLink, Users, Calendar, RefreshCw, Settings } from "lucide-react"
 import { useInView } from "react-intersection-observer"
 import { formatDistanceToNow } from "date-fns"
+import { Post } from "@/lib/types"
 
 interface SourceProfile {
   id: string
@@ -25,22 +26,6 @@ interface SourceProfile {
   postCount: number
   isFollowing: boolean
   priority?: "see_first" | "normal" | "see_less"
-}
-
-interface Post {
-  id: string
-  title: string
-  content?: string
-  summary?: string
-  url: string
-  author?: string
-  publishedAt: string
-  imageUrl?: string
-  source: {
-    title: string
-    iconUrl?: string
-    websiteUrl?: string
-  }
 }
 
 export default function SourceProfilePage() {
@@ -370,7 +355,7 @@ export default function SourceProfilePage() {
       ) : (
         <div className="space-y-6">
           {posts.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard key={post.id} post={post as Post} />
           ))}
         </div>
       )}
