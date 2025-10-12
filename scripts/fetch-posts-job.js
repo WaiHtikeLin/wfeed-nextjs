@@ -7,19 +7,26 @@
  * the rss-parser library for better reliability and accuracy.
  */
 
+// Load environment variables from .env when running the script manually
+try { require('dotenv').config() } catch (e) {}
+
 const mysql = require("mysql2/promise")
 const Parser = require("rss-parser")
 const cheerio = require("cheerio")
 const he = require("he")
 const { v4: uuidv4 } = require("uuid")
+const pLimit = require('p-limit')
 
-// Database connection
-const createConnection = async () => {
-  return mysql.createConnection({
+// Database pool
+const createPool = () => {
+  const limit = parseInt(process.env.DB_CONNECTION_LIMIT || '10', 10)
+  return mysql.createPool({
     host: process.env.DATABASE_HOST || "localhost",
     user: process.env.DATABASE_USER || "root",
     password: process.env.DATABASE_PASSWORD || "",
     database: process.env.DATABASE_NAME || "rss_reader",
+    waitForConnections: true,
+    connectionLimit: limit,
   })
 }
 
@@ -122,8 +129,8 @@ function getItemDescription(item) {
 
   for (const source of descSources) {
     if (source && typeof source === "string" && source.trim()) {
-      const cleaned = cleanHtmlContent(source)
-      return cleaned.length > 500 ? cleaned.substring(0, 500) + "..." : cleaned
+      return cleanHtmlContent(source)
+      // return cleaned.length > 500 ? cleaned.substring(0, 500) + "..." : cleaned
     }
   }
   return undefined
@@ -272,8 +279,8 @@ const runFetchJob = async () => {
 
     const [sources] = await connection.execute(`
       SELECT id, feed_url, feedly_id, title as source_title
-      FROM rss_sources
-      ORDER BY created_at DESC
+      FROM rss_sources where last_fetched_at IS NULL OR last_fetched_at < NOW() - INTERVAL 5 MINUTE
+      ORDER BY created_at DESC LIMIT 100
     `)
 
     if (!sources.length) {
@@ -288,47 +295,70 @@ const runFetchJob = async () => {
     let processedSources = 0
     let errorSources = 0
 
-    for (const source of sources) {
-      try {
-        console.log(`\n🔍 Processing: ${source.source_title}`)
-        processedSources++
+    // configure web-push if VAPID keys are present
+    let webpush = null
+    try {
+      const vp = process.env.VAPID_PUBLIC_KEY
+      const vk = process.env.VAPID_PRIVATE_KEY
+      const vs = process.env.VAPID_SUBJECT || process.env.VAPID_VAPID_SUBJECT || 'mailto:admin@example.com'
+      if (vp && vk) {
+        webpush = require('web-push')
+        webpush.setVapidDetails(vs, vp, vk)
+        console.log('🔐 web-push configured with VAPID keys')
+      } else {
+        console.warn('web-push VAPID keys missing in environment; push notifications will be skipped')
+      }
+    } catch (e) {
+      console.warn('web-push initialization failed, push notifications will be skipped', e && e.message)
+      webpush = null
+    }
 
+    // extract per-source processing so we can run in parallel with controlled concurrency
+    const processSource = async (source, pool, webpush) => {
+      console.log(`\n🔍 Processing: ${source.source_title}`)
+      processedSources++
+
+      try {
         let feedUrl = source.feed_url
 
         if (!feedUrl || feedUrl === source.feedly_id || feedUrl.startsWith("feed/")) {
           feedUrl = convertFeedlyIdToRssUrl(source.feedly_id)
-          await connection.execute("UPDATE rss_sources SET feed_url = ? WHERE id = ?", [feedUrl, source.id])
-          updatedSources++
+          await pool.execute("UPDATE rss_sources SET feed_url = ? WHERE id = ?", [feedUrl, source.id])
           console.log(`✅ Updated feed URL: ${feedUrl}`)
+          return { newPosts: 0, updated: 1, error: 0 }
         }
 
         const feed = await parseRSSFeed(feedUrl)
         if (!feed || !feed.items.length) {
           console.log(`⚠️ No posts found`)
-          continue
+          return { newPosts: 0, updated: 0, error: 0 }
         }
 
         console.log(`📄 Processing ${feed.items.length} posts`)
 
         let newPostsForSource = 0
+
+        // get Max pubDate from existing posts to avoid duplicates
+        const [maxPostDateRows] = await pool.execute(
+          "SELECT MAX(published_at) as max_date FROM posts WHERE source_id = ?",
+          [source.id]
+        )
+
+        const maxDate = maxPostDateRows[0]?.max_date ? new Date(maxPostDateRows[0].max_date) : null
+        let postError = null
+        
         for (const item of feed.items) {
           try {
-            // Check if post exists
-            const [existingPosts] = await connection.execute("SELECT id FROM posts WHERE url = ? AND source_id = ?", [
-              item.link,
-              source.id,
-            ])
-
-            if (existingPosts.length > 0) {
+            const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
+            if (maxDate && publishedAt <= maxDate) {
               continue
             }
 
             const postId = uuidv4()
-            const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
             const imageUrl = extractImageFromContent(item.content || item.description || "")
             const summary = item.description || ""
 
-            await connection.execute(
+            await pool.execute(
               `
               INSERT INTO posts (id, source_id, title, content, summary, url, author, published_at, image_url)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -347,17 +377,78 @@ const runFetchJob = async () => {
             )
 
             newPostsForSource++
-            totalNewPosts++
           } catch (postError) {
             console.error(`❌ Error inserting post: ${item.title}`, postError.message)
           }
         }
 
+        if (!postError)
+          await pool.execute("UPDATE rss_sources SET last_fetched_at = ? WHERE id = ?", [new Date(), source.id])
+
         console.log(`✅ Added ${newPostsForSource} new posts`)
+
+        // Send web push notifications to followers of this source
+        if (webpush && newPostsForSource > 0) {
+          try {
+            // get follower user_ids for this source (adjust table name if different)
+            const [followers] = await pool.execute('SELECT user_id FROM user_subscriptions WHERE allow_noti is true and source_id = ?', [source.id])
+            console.log(`👥 Notifying ${followers.length} followers`)
+            if (followers.length > 0) {
+              const userIds = followers.map(f => f.user_id)
+              // fetch subscriptions for these users
+              const placeholders = userIds.map(() => '?').join(',')
+              const [subs] = await pool.execute(
+                `SELECT id, user_id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id IN (${placeholders})`,
+                userIds
+              )
+
+              const payload = {
+                title: `New posts from ${source.source_title}`,
+                body: `${newPostsForSource} new post${newPostsForSource > 1 ? 's' : ''}`,
+                url: `/source/${source.id}`,
+                icon: '/logo.png'
+              }
+
+              console.log(`🚀 Sending notifications to ${subs.length} subscriptions`)
+              for (const s of subs) {
+                const pushSubscription = {
+                  endpoint: s.endpoint,
+                  keys: { p256dh: s.p256dh, auth: s.auth }
+                }
+                try {
+                  await webpush.sendNotification(pushSubscription, JSON.stringify(payload))
+                } catch (err) {
+                  console.warn('Push send error', err && err.statusCode ? err.statusCode : err, s.id)
+                  // remove invalid subscriptions
+                  const statusCode = err && err.statusCode
+                  if (statusCode === 410 || statusCode === 404) {
+                    await pool.execute('DELETE FROM push_subscriptions WHERE id = ?', [s.id])
+                  }
+                }
+              }
+            }
+          } catch (notifyErr) {
+            console.error('Error sending notifications for source', source.id, notifyErr)
+          }
+        }
+
+        return { newPosts: newPostsForSource, updated: 0, error: 0 }
       } catch (feedError) {
-        errorSources++
         console.error(`❌ Error processing ${source.source_title}:`, feedError.message)
+        return { newPosts: 0, updated: 0, error: 1 }
       }
+    }
+
+    // run sources with limited concurrency
+    const concurrency = 10
+    const limit = pLimit(concurrency)
+    const tasks = sources.map(s => limit(() => processSource(s, pool, webpush)))
+    const results = await Promise.all(tasks)
+
+    for (const r of results) {
+      totalNewPosts += r.newPosts || 0
+      updatedSources += r.updated || 0
+      errorSources += r.error || 0
     }
 
     const duration = Date.now() - startTime

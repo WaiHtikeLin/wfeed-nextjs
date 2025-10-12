@@ -1,3 +1,4 @@
+SET time_zone = "+00:00";
 -- Create database schema for RSS Reader
 CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(191) PRIMARY KEY,
@@ -17,6 +18,8 @@ CREATE TABLE IF NOT EXISTS rss_sources (
     feed_url VARCHAR(500) NOT NULL,
     icon_url VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    last_fetched_at TIMESTAMP NULL
 );
 
 CREATE TABLE IF NOT EXISTS user_subscriptions (
@@ -24,6 +27,7 @@ CREATE TABLE IF NOT EXISTS user_subscriptions (
     user_id VARCHAR(191) NOT NULL,
     source_id VARCHAR(191) NOT NULL,
     priority ENUM('see_first', 'normal', 'see_less') DEFAULT 'normal',
+    allow_noti BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (source_id) REFERENCES rss_sources(id) ON DELETE CASCADE,

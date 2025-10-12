@@ -11,6 +11,7 @@ export interface Post {
   source: {
     id: string
     title: string
+    feedlyId?: string
     iconUrl?: string
     websiteUrl?: string
     priority?: string

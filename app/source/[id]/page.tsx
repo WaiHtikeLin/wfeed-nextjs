@@ -12,6 +12,15 @@ import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ExternalLink, Users, Calendar, RefreshCw, Settings } from "lucide-react"
 import { useInView } from "react-intersection-observer"
 import { formatDistanceToNow } from "date-fns"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog"
+import { useAuth } from "@/hooks/use-auth"
 import { Post } from "@/lib/types"
 
 interface SourceProfile {
@@ -32,6 +41,8 @@ export default function SourceProfilePage() {
   const params = useParams()
   const router = useRouter()
   const sourceId = params.id as string
+  const { user } = useAuth();
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   const [source, setSource] = useState<SourceProfile | null>(null)
   const [posts, setPosts] = useState<Post[]>([])
@@ -111,9 +122,12 @@ export default function SourceProfilePage() {
   }
 
   const handleFollow = async (priority: "see_first" | "normal" | "see_less") => {
-    if (!source) return
-
-    setFollowLoading(true)
+    if (!user) {
+      setShowAuthDialog(true);
+      return;
+    }
+    if (!source) return;
+    setFollowLoading(true);
     try {
       const response = await fetch("/api/subscriptions", {
         method: "POST",
@@ -126,17 +140,16 @@ export default function SourceProfilePage() {
           iconUrl: source.iconUrl,
           priority,
         }),
-      })
-
+      });
       if (response.ok) {
-        setSource((prev) => (prev ? { ...prev, isFollowing: true, priority } : null))
+        setSource((prev) => (prev ? { ...prev, isFollowing: true, priority } : null));
       } else {
-        setError("Failed to follow source")
+        setError("Failed to follow source");
       }
     } catch (err) {
-      setError("An error occurred while following the source")
+      setError("An error occurred while following the source");
     } finally {
-      setFollowLoading(false)
+      setFollowLoading(false);
     }
   }
 
@@ -217,7 +230,22 @@ export default function SourceProfilePage() {
   if (!source) return null
 
   return (
-    <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
+    <>
+      <Dialog open={showAuthDialog} onOpenChange={setShowAuthDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>This feature requires authentication</DialogTitle>
+            <DialogDescription>
+              Please login or register to follow sources and manage your feed.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setShowAuthDialog(false); router.push("/register"); }}>Register</Button>
+            <Button onClick={() => { setShowAuthDialog(false); router.push("/login"); }}>Login</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
       <div className="mb-6">
         <Button variant="ghost" onClick={() => router.back()} className="mb-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -228,99 +256,89 @@ export default function SourceProfilePage() {
       {/* Source Profile Header */}
       <Card className="mb-8">
         <CardHeader className="pb-6">
-          <div className="flex items-start space-x-4">
-            <Avatar className="h-20 w-20">
+          <div
+            className="flex flex-col items-center sm:flex-row sm:items-start sm:space-x-4 text-center sm:text-left"
+          >
+            <Avatar className="h-20 w-20 mb-4 sm:mb-0">
               <AvatarImage src={source.iconUrl || "/placeholder.svg"} alt={source.title} />
               <AvatarFallback className="text-2xl">{source.title.charAt(0)}</AvatarFallback>
             </Avatar>
-
             <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2 truncate">{source.title}</h1>
-                  {source.description && <p className="text-gray-600 mb-4 line-clamp-2">{source.description}</p>}
+              <h1 className="text-3xl font-bold text-gray-900 mb-2 truncate">{source.title}</h1>
+              {source.description && <p className="text-gray-600 mb-4 line-clamp-2">{source.description}</p>}
 
-                  <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 mb-4">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      <span>Added {formatDistanceToNow(new Date(source.createdAt), { addSuffix: true })}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Users className="h-4 w-4" />
-                      <span>{source.postCount} posts</span>
-                    </div>
-                    {source.websiteUrl && (
-                      <a
-                        href={source.websiteUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                        <span>Visit website</span>
-                      </a>
+              {/* Follow/Unfollow Buttons below title/description */}
+              <div className="mb-4">
+                {source.isFollowing ? (
+                  <div className="flex items-center justify-center sm:justify-start gap-2 mb-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleUnfollow}
+                      disabled={followLoading}
+                      className="min-w-[100px]"
+                    >
+                      {followLoading ? "..." : "Unfollow"}
+                    </Button>
+                    <Badge variant="secondary" className="bg-green-100 text-green-800">
+                      Following
+                    </Badge>
+                    {source.priority && (
+                      <Badge variant="outline">
+                        {source.priority === "see_first"
+                          ? "See First"
+                          : source.priority === "see_less"
+                            ? "See Less"
+                            : "Normal"}
+                      </Badge>
                     )}
                   </div>
-
-                  {source.isFollowing && (
-                    <div className="flex items-center gap-2 mb-4">
-                      <Badge variant="secondary" className="bg-green-100 text-green-800">
-                        Following
-                      </Badge>
-                      {source.priority && (
-                        <Badge variant="outline">
-                          {source.priority === "see_first"
-                            ? "See First"
-                            : source.priority === "see_less"
-                              ? "See Less"
-                              : "Normal"}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex flex-col gap-2 ml-4">
-                  {source.isFollowing ? (
-                    <>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2 mb-2 items-center sm:items-start">
+                    <Button onClick={() => handleFollow("normal")} disabled={followLoading} className="min-w-[100px]">
+                      {followLoading ? "..." : "Follow"}
+                    </Button>
+                    <div className="flex gap-1">
                       <Button
                         variant="outline"
-                        onClick={handleUnfollow}
+                        size="sm"
+                        onClick={() => handleFollow("see_first")}
                         disabled={followLoading}
-                        className="min-w-[100px]"
                       >
-                        {followLoading ? "..." : "Unfollow"}
+                        See First
                       </Button>
-                      <Button variant="ghost" size="sm">
-                        <Settings className="h-4 w-4" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFollow("see_less")}
+                        disabled={followLoading}
+                      >
+                        See Less
                       </Button>
-                    </>
-                  ) : (
-                    <div className="flex flex-col gap-2">
-                      <Button onClick={() => handleFollow("normal")} disabled={followLoading} className="min-w-[100px]">
-                        {followLoading ? "..." : "Follow"}
-                      </Button>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFollow("see_first")}
-                          disabled={followLoading}
-                        >
-                          See First
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleFollow("see_less")}
-                          disabled={followLoading}
-                        >
-                          See Less
-                        </Button>
-                      </div>
                     </div>
-                  )}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4 text-sm text-gray-500 mb-4">
+                <div className="flex items-center gap-1">
+                  <Calendar className="h-4 w-4" />
+                  <span>Added {formatDistanceToNow(new Date(source.createdAt), { addSuffix: true })}</span>
                 </div>
+                <div className="flex items-center gap-1">
+                  <Users className="h-4 w-4" />
+                  <span>{source.postCount} posts</span>
+                </div>
+                {source.websiteUrl && (
+                  <a
+                    href={source.websiteUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    <span>Visit website</span>
+                  </a>
+                )}
               </div>
             </div>
           </div>
@@ -376,5 +394,6 @@ export default function SourceProfilePage() {
         </div>
       )}
     </div>
-  )
+    </>
+  );
 }

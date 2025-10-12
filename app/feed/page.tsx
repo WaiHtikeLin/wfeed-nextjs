@@ -5,6 +5,10 @@ import { PostCard } from "@/components/post-card"
 import { PostSkeleton } from "@/components/post-skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import ContentWrapper from "@/components/ui/content-wrapper"
+import SectionHeader from "@/components/ui/section-header"
+import EmptyState from "@/components/ui/empty-state"
+import PostsList from "@/components/ui/posts-list"
 import { RefreshCw, Rss } from "lucide-react"
 import { useInView } from "react-intersection-observer"
 import { useHomeStore } from "@/lib/store"
@@ -68,6 +72,7 @@ export default function FeedPage() {
           const newMaxPublishedAt = data.maxPublishedAt || null
 
           console.log(`✅ Received ${newPosts.length} posts`)
+          console.log(`📅 New maxPublishedAt: ${newMaxPublishedAt}`)
 
           if (reset || pageNum === 1) {
             setPosts(newPosts)
@@ -77,7 +82,8 @@ export default function FeedPage() {
           } else {
             addPosts(newPosts)
             setPage(pageNum)
-            setMaxPublishedAt(newMaxPublishedAt)
+            if(newMaxPublishedAt) 
+              setMaxPublishedAt(newMaxPublishedAt)
           }
 
           setHasMore(newPosts.length >= 10)
@@ -122,37 +128,30 @@ export default function FeedPage() {
 
   if (loading && posts.length === 0) {
     return (
-      <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Feed</h1>
-            <p className="text-gray-600">Latest posts from your subscriptions</p>
-          </div>
-        </div>
+      <ContentWrapper>
+        <SectionHeader title="Your Feed" subtitle="Latest posts from your subscriptions" />
 
-        <div className="space-y-6">
+        <PostsList>
           {[...Array(5)].map((_, i) => (
             <PostSkeleton key={i} />
           ))}
-        </div>
-      </div>
+        </PostsList>
+      </ContentWrapper>
     )
   }
 
   return (
-    <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Your Feed</h1>
-          <p className="text-gray-600">Latest posts from your subscriptions</p>
-        </div>
-        <div className="flex gap-2">
+    <ContentWrapper>
+      <SectionHeader
+        title="Your Feed"
+        subtitle="Latest posts from your subscriptions"
+        actions={
           <Button variant="outline" onClick={handleRefresh} disabled={loading} className="flex items-center gap-2">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -161,26 +160,21 @@ export default function FeedPage() {
       )}
 
       {posts.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Rss className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-gray-900 mb-2">No posts in your feed</h3>
-          <p className="text-gray-600 mb-6">
-            Start following RSS sources to see posts here. Search for your favorite websites and blogs.
-          </p>
-          <Button asChild>
-            <a href="/search">Find RSS Sources</a>
-          </Button>
-        </div>
+        <EmptyState
+          icon={<Rss className="h-16 w-16 text-gray-400 mx-auto mb-4" />}
+          title="No posts in your feed"
+          description={
+            "Start following RSS sources to see posts here. Search for your favorite websites and blogs."
+          }
+          actions={<Button asChild><a href="/search">Find RSS Sources</a></Button>}
+        />
       )}
 
-      <div className="space-y-6">
+      <PostsList>
         {posts.map((post) => (
-          <PostCard
-            key={post.id}
-            post={post as Post}
-          />
+          <PostCard key={post.id} post={post as Post} />
         ))}
-      </div>
+      </PostsList>
 
       {loadingMore && (
         <div className="space-y-6 mt-6">
@@ -197,6 +191,6 @@ export default function FeedPage() {
           <p>{"You've reached the end of your feed"}</p>
         </div>
       )}
-    </div>
+    </ContentWrapper>
   )
 }

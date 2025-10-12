@@ -5,10 +5,10 @@ import { v4 as uuidv4 } from "uuid"
 
 export async function POST(request: NextRequest) {
   try {
-    const user = getUserFromRequest(request)
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // const user = getUserFromRequest(request)
+    // if (!user) {
+    //   return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // }
 
     const { feedId, title, description, website, iconUrl } = await request.json()
 

@@ -72,4 +72,34 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
   }
+
+  /* Modal/dialog fade and scale animations */
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes fadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  @keyframes dialogIn {
+    from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+  @keyframes dialogOut {
+    from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    to { opacity: 0; transform: translate(-50%, -52%) scale(0.96); }
+  }
+  .animate-fadeIn {
+    animation: fadeIn 0.2s cubic-bezier(0.4,0,0.2,1);
+  }
+  .animate-fadeOut {
+    animation: fadeOut 0.15s cubic-bezier(0.4,0,0.2,1);
+  }
+  .animate-dialogIn {
+    animation: dialogIn 0.25s cubic-bezier(0.4,0,0.2,1);
+  }
+  .animate-dialogOut {
+    animation: dialogOut 0.18s cubic-bezier(0.4,0,0.2,1);
+  }
 }

@@ -14,21 +14,7 @@ interface SearchResult {
   subscribers?: number
 }
 
-interface Post {
-  id: string
-  title: string
-  content?: string
-  summary?: string
-  url: string
-  author?: string
-  publishedAt: string
-  imageUrl?: string
-  source: {
-    title: string
-    iconUrl?: string
-    websiteUrl?: string
-  }
-}
+import type { Post as PostType } from "@/lib/types"
 
 interface SearchState {
   query: string
@@ -44,24 +30,25 @@ interface SearchState {
 }
 
 interface HomeState {
-  posts: Post[]
-  page: number
-  hasMore: boolean
-  scrollPosition: number
-  lastFetchTime: number
-  navigationId: string
-  followStatusVersion: number
-  setPosts: (posts: Post[]) => void
-  addPosts: (posts: Post[]) => void
-  setPage: (page: number) => void
-  setHasMore: (hasMore: boolean) => void
-  setScrollPosition: (position: number) => void
-  setLastFetchTime: (time: number) => void
-  setNavigationId: (id: string) => void
-  setFollowStatusVersion: (version: number) => void
-  resetPosts: () => void
-  clearOnReload: () => void
-  shouldRefreshData: () => boolean
+  posts: PostType[];
+  page: number;
+  hasMore: boolean;
+  scrollPosition: number;
+  lastFetchTime: number;
+  navigationId: string;
+  followStatusVersion: number;
+  setPosts: (posts: PostType[]) => void;
+  addPosts: (posts: PostType[]) => void;
+  updateSourcePriority: (sourceId: string, priority: string) => void;
+  setPage: (page: number) => void;
+  setHasMore: (hasMore: boolean) => void;
+  setScrollPosition: (position: number) => void;
+  setLastFetchTime: (time: number) => void;
+  setNavigationId: (id: string) => void;
+  setFollowStatusVersion: (version: number) => void;
+  resetPosts: () => void;
+  clearOnReload: () => void;
+  shouldRefreshData: () => boolean;
 }
 
 // Simple search store without persistence
@@ -129,6 +116,15 @@ export const useHomeStore = create<HomeState>()(
           posts: [...state.posts, ...posts],
           lastFetchTime: Date.now(),
         })),
+      updateSourcePriority: (sourceId: string, priority: string) => {
+        set((state) => ({
+          posts: state.posts.map((post) =>
+            post.source && post.source.id === sourceId
+              ? { ...post, source: { ...post.source, priority } }
+              : post
+          ),
+        }))
+      },
       setPage: (page) => {
         const current = get()
         if (current.page !== page) {
@@ -207,29 +203,35 @@ export const useHomeStore = create<HomeState>()(
 )
 
 // Hook for scroll restoration with navigation awareness
-// export const useScrollRestoration = (storeName: "search" | "home") => {
-//   const searchStore = useSearchStore()
-//   const homeStore = useHomeStore()
+export const useScrollRestoration = (storeName: "search" | "home") => {
+  const searchStore = useSearchStore()
+  const homeStore = useHomeStore()
 
-//   const store = storeName === "search" ? searchStore : homeStore
+  const store = storeName === "search" ? searchStore : homeStore
 
-//   const saveScrollPosition = useCallback(() => {
-//     const position = window.scrollY
-//     store.setScrollPosition(position)
-//   }, [store])
+  const saveScrollPosition = useCallback(() => {
+    const position = window.scrollY
+    if (storeName === "home") {
+      // Home store has scrollPosition setter
+      (homeStore as HomeState).setScrollPosition(position)
+    } else {
+      // Search store may implement similar API
+      (searchStore as any).setScrollPosition?.(position)
+    }
+  }, [homeStore, searchStore, storeName])
 
-//   const restoreScrollPosition = useCallback(() => {
-//     const position = store.scrollPosition
-//     if (position > 0) {
-//       // Use requestAnimationFrame to ensure DOM is ready
-//       requestAnimationFrame(() => {
-//         window.scrollTo({
-//           top: position,
-//           behavior: "instant",
-//         })
-//       })
-//     }
-//   }, [store.scrollPosition])
+  const restoreScrollPosition = useCallback(() => {
+    const position = storeName === "home" ? (homeStore as HomeState).scrollPosition : (searchStore as any).scrollPosition
+    if (position > 0) {
+      // Use requestAnimationFrame to ensure DOM is ready
+      requestAnimationFrame(() => {
+        window.scrollTo({
+          top: position,
+          behavior: "instant",
+        })
+      })
+    }
+  }, [homeStore, searchStore, storeName])
 
-//   return { saveScrollPosition, restoreScrollPosition }
-// }
+  return { saveScrollPosition, restoreScrollPosition }
+}

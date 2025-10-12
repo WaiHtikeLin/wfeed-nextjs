@@ -24,10 +24,14 @@ export async function POST(request: NextRequest) {
       actualFeedUrl = feedId.replace("feed/", "")
     }
 
-    // First, ensure the RSS source exists
-    const sourceId = uuidv4()
+    // Get the actual source ID
+    const [sources] = await db.execute("SELECT id FROM rss_sources WHERE feedly_id = ?", [feedId])
+    let actualSourceId = Array.isArray(sources) && sources.length > 0 ? (sources[0] as any).id : null
 
-    // Try to insert the source, or get existing one
+    if(!actualSourceId) {
+   const sourceId = uuidv4()
+   actualSourceId = sourceId
+
     try {
       await db.execute(
         `
@@ -45,10 +49,7 @@ export async function POST(request: NextRequest) {
     } catch (sourceError) {
       console.error("Source insert error:", sourceError)
     }
-
-    // Get the actual source ID
-    const [sources] = await db.execute("SELECT id FROM rss_sources WHERE feedly_id = ?", [feedId])
-    const actualSourceId = Array.isArray(sources) && sources.length > 0 ? (sources[0] as any).id : sourceId
+    }
 
     console.log(`📝 Using source ID: ${actualSourceId}`)
 
@@ -107,6 +108,19 @@ export async function GET(request: NextRequest) {
 
     console.log(`📋 API: Getting subscriptions - User: ${user.email}`)
 
+    // Sorting logic
+    const { searchParams } = new URL(request.url)
+    const search = searchParams.get("search")?.trim() || ""
+    const sort = searchParams.get("sort") || "priority"
+    let orderBy = "us.priority DESC, us.created_at DESC"
+    if (sort === "date_followed") {
+      orderBy = "us.created_at DESC"
+    } else if (sort === "name") {
+      orderBy = "s.title COLLATE utf8mb4_unicode_ci ASC"
+    } else if (sort === "priority") {
+      orderBy = "FIELD(us.priority, 'see_first', 'normal', 'see_less'), us.created_at DESC"
+    }
+
     const [subscriptions] = await db.execute(
       `
       SELECT 
@@ -115,13 +129,14 @@ export async function GET(request: NextRequest) {
         s.description,
         s.website_url,
         s.icon_url,
-        us.priority
+        us.priority,
+        s.id
       FROM user_subscriptions us
       JOIN rss_sources s ON us.source_id = s.id
-      WHERE us.user_id = ?
-      ORDER BY us.created_at DESC
+      WHERE us.user_id = ? AND (s.title LIKE ? OR s.description LIKE ?)
+      ORDER BY ${orderBy}
     `,
-      [user.id],
+      [user.id, `%${search}%`, `%${search}%`],
     )
 
     console.log(`✅ API: Returning ${Array.isArray(subscriptions) ? subscriptions.length : 0} subscriptions`)

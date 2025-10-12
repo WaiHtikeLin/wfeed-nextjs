@@ -11,6 +11,8 @@ import { Search, Loader2, X } from "lucide-react"
 import { SearchResultCard } from "@/components/search-result-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSearchStore } from "@/lib/store"
+import ContentWrapper from "@/components/ui/content-wrapper"
+import SectionHeader from "@/components/ui/section-header"
 
 interface SearchResult {
   id: string
@@ -20,6 +22,7 @@ interface SearchResult {
   feedId: string
   iconUrl?: string
   subscribers?: number
+  priority?: "see_first" | "normal" | "see_less";
 }
 
 export default function SearchPage() {
@@ -185,11 +188,8 @@ export default function SearchPage() {
   const showMinLengthMessage = hasSearched && query.trim().length > 0 && query.trim().length < 3 && !loading
 
   return (
-    <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Search RSS Feeds</h1>
-        <p className="text-gray-600">Discover and follow your favorite RSS sources</p>
-      </div>
+    <ContentWrapper>
+      <SectionHeader title={"Search RSS Feeds"} subtitle={"Discover and follow your favorite RSS sources"} />
 
       <Card className="mb-8">
         <CardContent className="p-6">
@@ -300,6 +300,8 @@ export default function SearchPage() {
               onFollow={handleFollow}
               isFollowing={followingIds.has(result.feedId)}
               isLoading={followLoading.has(result.feedId)}
+              followPriority={(result as any).priority}
+              onUnfollow={() => {}}
             />
           ))}
         </div>
@@ -332,6 +334,6 @@ export default function SearchPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+    </ContentWrapper>
   )
 }

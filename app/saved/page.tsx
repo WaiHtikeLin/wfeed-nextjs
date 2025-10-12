@@ -5,25 +5,13 @@ import { PostCard } from "@/components/post-card"
 import { PostSkeleton } from "@/components/post-skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import ContentWrapper from "@/components/ui/content-wrapper"
+import SectionHeader from "@/components/ui/section-header"
+import PostsList from "@/components/ui/posts-list"
+import EmptyState from "@/components/ui/empty-state"
 import { RefreshCw, Bookmark } from "lucide-react"
 import { useInView } from "react-intersection-observer"
-
-interface Post {
-  id: string
-  title: string
-  content?: string
-  summary?: string
-  url: string
-  author?: string
-  publishedAt: string
-  imageUrl?: string
-  savedAt: string
-  source: {
-    title: string
-    iconUrl?: string
-    websiteUrl?: string
-  }
-}
+import type { Post } from "@/lib/types"
 
 export default function SavedPostsPage() {
   const [posts, setPosts] = useState<Post[]>([])
@@ -100,37 +88,30 @@ export default function SavedPostsPage() {
 
   if (loading && posts.length === 0) {
     return (
-      <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Saved Posts</h1>
-            <p className="text-gray-600">Your bookmarked articles</p>
-          </div>
-        </div>
+      <ContentWrapper>
+        <SectionHeader title="Saved Posts" subtitle="Your bookmarked articles" />
 
-        <div className="space-y-6">
+        <PostsList>
           {[...Array(5)].map((_, i) => (
             <PostSkeleton key={i} />
           ))}
-        </div>
-      </div>
+        </PostsList>
+      </ContentWrapper>
     )
   }
 
   return (
-    <div className="pt-20 pb-8 px-4 max-w-4xl mx-auto">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Saved Posts</h1>
-          <p className="text-gray-600">Your bookmarked articles</p>
-        </div>
-        <div className="flex gap-2">
+    <ContentWrapper>
+      <SectionHeader
+        title="Saved Posts"
+        subtitle="Your bookmarked articles"
+        actions={
           <Button variant="outline" onClick={handleRefresh} disabled={loading} className="flex items-center gap-2">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       {error && (
         <Alert variant="destructive" className="mb-6">
@@ -138,24 +119,20 @@ export default function SavedPostsPage() {
         </Alert>
       )}
 
-      {posts.length === 0 && !loading && (
-        <div className="text-center py-12">
-          <Bookmark className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-medium text-gray-900 mb-2">No saved posts yet</h3>
-          <p className="text-gray-600 mb-6">
-            Start saving posts by clicking the "Save" button on articles you want to read later
-          </p>
-          <Button asChild>
-            <a href="/">Browse Posts</a>
-          </Button>
-        </div>
+      {posts.length === 0 && !loading ? (
+        <EmptyState
+          icon={<Bookmark className="h-16 w-16 text-gray-400 mx-auto mb-4" />}
+          title="No saved posts yet"
+          description={'Start saving posts by clicking the "Save" button on articles you want to read later'}
+          actions={<Button asChild><a href="/">Browse Posts</a></Button>}
+        />
+      ) : (
+        <PostsList>
+          {posts.map((post) => (
+            <PostCard key={post.id} post={post} isSaved={true} onSaveToggle={handleSaveToggle} />
+          ))}
+        </PostsList>
       )}
-
-      <div className="space-y-6">
-        {posts.map((post) => (
-          <PostCard key={post.id} post={post} isSaved={true} onSaveToggle={handleSaveToggle} />
-        ))}
-      </div>
 
       {loadingMore && (
         <div className="space-y-6 mt-6">
@@ -172,6 +149,6 @@ export default function SavedPostsPage() {
           <p>{"You've reached the end of your saved posts"}</p>
         </div>
       )}
-    </div>
+    </ContentWrapper>
   )
 }

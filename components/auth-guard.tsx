@@ -8,9 +8,12 @@ import { useAuth } from "@/hooks/use-auth"
 import { Loader2 } from "lucide-react"
 
 const publicRoutes = [
+  "/",
   "/login",
   "/register",
-  /^\/date\/[^/]+\/posts$/
+  "/search",
+  /^\/date\/[^/]+\/posts$/,
+  /^\/source\/[^/]+$/,
 ]
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -26,8 +29,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
 
       if (!user && !isPublicRoute) {
         router.push("/login")
-      } else if (user && isPublicRoute) {
-        router.push("/")
       }
     }
   }, [user, loading, pathname, router])
