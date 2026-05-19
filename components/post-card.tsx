@@ -277,7 +277,7 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle }: Post
             <h2 className="text-lg font-semibold leading-tight line-clamp-2">{post.title}</h2>
 
             {post.summary && <p className="text-gray-600 text-sm line-clamp-3">{post.summary}</p>}
-
+            
             {post.imageUrl && (
               <div className="relative w-full h-64 rounded-lg overflow-hidden">
                 <Image
@@ -289,6 +289,16 @@ export function PostCard({ post, sourceId, isSaved = false, onSaveToggle }: Post
                     const target = e.target as HTMLImageElement
                     target.style.display = "none"
                   }}
+                />
+              </div>
+            )}
+
+            {post.url && post.url.includes("youtube.com") && (
+              <div className="relative w-full h-64 rounded-lg overflow-hidden">
+                <iframe
+                  src={post.url.replace("watch?v=", "embed/")}
+                  title={post.title}
+                  className="w-full h-full"
                 />
               </div>
             )}

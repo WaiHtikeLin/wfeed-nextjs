@@ -35,10 +35,15 @@ interface SearchResult {
   subscribers?: number
 }
 
+interface FollowResult {
+  id: string
+  priority: string
+}
+
 interface SearchResultCardProps {
   result: SearchResult
   onFollow: (feedId: string, priority: "see_first" | "normal" | "see_less") => void
-  isFollowing?: boolean
+  isFollowing?: FollowResult
   isLoading?: boolean
   onUnfollow?: () => void
   showFollowActions?: boolean
@@ -77,7 +82,7 @@ export function SearchResultCard(props: SearchResultCardProps & { followPriority
   }
 
   // Determine follow priority for icon and dropdown
-  const followPriority = (typeof followPriorityProp !== 'undefined' ? followPriorityProp : (result as any).priority);
+  const followPriority = isFollowing ? isFollowing.priority : (typeof followPriorityProp !== 'undefined' ? followPriorityProp : (result as any).priority);
 
   let priorityIcon = null;
   if (followPriority === "see_first") priorityIcon = <Star className="h-4 w-4 text-yellow-500 inline ml-1" fill="#facc15" />;

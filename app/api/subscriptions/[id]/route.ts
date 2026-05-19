@@ -9,8 +9,19 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const sourceId = params.id
+    let sourceId = params.id
     console.log(`🗑️ API: Unsubscribing from source ${sourceId} - User: ${user.email}`)
+
+    if (sourceId.startsWith("feed/")) {
+      type SourceRow = { id: string }
+      const [source] = await db.execute("SELECT id FROM rss_sources WHERE feedly_id = ?", [sourceId]) as [SourceRow[], any]
+      if (Array.isArray(source) && source.length > 0) {
+        sourceId = source[0].id
+      } else {
+        console.log(`⚠️ Source not found for feedly_id: ${sourceId}`)
+        return NextResponse.json({ error: "Source not found" }, { status: 404 })
+      }
+    }
 
     // Verify the subscription exists before deleting
     const [existing] = await db.execute("SELECT id FROM user_subscriptions WHERE user_id = ? AND source_id = ?", [
@@ -19,6 +30,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     ])
 
     if (!Array.isArray(existing) || existing.length === 0) {
+
       console.log(`⚠️ No subscription found for source ${sourceId}`)
       return NextResponse.json({ error: "Subscription not found" }, { status: 404 })
     }

@@ -122,6 +122,11 @@ export async function parseRSSFeed(feedUrl: string): Promise<RSSFeed | null> {
       cleanUrl = "https://" + cleanUrl
     }
 
+    // If reddit feed, fetch manually to avoid CORS issues and parse the content
+    if (cleanUrl.includes("reddit.com") && cleanUrl.endsWith("/.rss")) {
+      return await parseRedditFeed(cleanUrl)
+    }
+    
     const parser = createParser()
     const feed = await parser.parseURL(cleanUrl)
 
@@ -183,6 +188,45 @@ export async function parseRSSFeed(feedUrl: string): Promise<RSSFeed | null> {
       return await parseWithFetch(feedUrl)
     }
 
+    return null
+  }
+}
+
+async function parseRedditFeed(feedUrl: string): Promise<RSSFeed | null> {
+  try {
+    console.log(`🔍 Parsing Reddit feed: ${feedUrl}`)
+    const response = await fetch(feedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; RSS Reader Bot/1.0)",
+        Accept: "application/rss+xml, application/xml, text/xml",
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    const xmlText = await response.text()
+    const parser = createParser()
+    const feed = await parser.parseString(xmlText)
+    console.log(`✅ Successfully parsed Reddit feed: ${feed.title}`)
+    return {
+      title: cleanText(feed.title || "Unknown Feed"),
+      description: cleanText(feed.description),
+      link: feed.link,
+      items: feed.items?.map((item) => ({
+        title: cleanText(item.title || "Untitled"),
+        link: item.link || "",
+        description: getItemDescription(item),
+        content: getItemContent(item),
+        pubDate: getItemPubDate(item),
+        author: getItemAuthor(item),
+        guid: item.guid || item.link,
+        categories: item.categories || [],
+      })) || [],
+      lastBuildDate: feed.lastBuildDate,
+      language: feed.language,
+    }
+  } catch (error) {
+    console.error(`❌ Error parsing Reddit feed: ${feedUrl}`, error)
     return null
   }
 }

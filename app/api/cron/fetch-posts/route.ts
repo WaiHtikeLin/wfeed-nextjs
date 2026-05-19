@@ -74,8 +74,12 @@ export async function GET() {
           try {
             const postId = uuidv4()
             const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
-            const imageUrl = extractImageFromContent(item.content || item.description || "")
+            const imageUrl = extractImageFromContent(item.content || item.description || "") || null
             const summary = item.description || ""
+            const titleVal = item.title || item.link || "Untitled"
+            const contentVal = item.content || item.description || null
+            const urlVal = item.link || null
+            const authorVal = item.author || null
 
             // Check if post already exists
             const [existingPosts] = await db.execute("SELECT id FROM posts WHERE url = ? AND source_id = ?", [
@@ -92,17 +96,7 @@ export async function GET() {
               INSERT INTO posts (id, source_id, title, content, summary, url, author, published_at, image_url)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
-              [
-                postId,
-                source.id,
-                item.title,
-                item.content || item.description,
-                summary,
-                item.link,
-                item.author || null,
-                publishedAt,
-                imageUrl,
-              ],
+              [postId, source.id, titleVal, contentVal, summary, urlVal, authorVal, publishedAt, imageUrl],
             )
 
             newPostsForSource++

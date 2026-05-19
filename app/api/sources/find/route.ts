@@ -22,6 +22,16 @@ export async function POST(request: NextRequest) {
       actualFeedUrl = feedId.replace("feed/", "")
     }
 
+    // If the website is a YouTube channel, convert it to the corresponding feed URL
+    if (website && website.includes("youtube.com/playlist")) {
+      const playlistIdMatch = website.match(/youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/)
+      if (playlistIdMatch && playlistIdMatch[1]) {
+        actualFeedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistIdMatch[1]}`
+      }
+    }
+
+    console.log("Actual feed URL:", actualFeedUrl)
+
     // Check if source already exists
     const [existingSources] = await db.execute("SELECT id FROM rss_sources WHERE feedly_id = ?", [feedId])
 
@@ -62,18 +72,24 @@ export async function POST(request: NextRequest) {
             )
             if (Array.isArray(existingPosts) && existingPosts.length > 0) continue
             const publishedAt = item.pubDate ? new Date(item.pubDate) : new Date()
-            const imageUrl = item.content ? extractImageFromContent(item.content) : null
+            const imageUrl = item.enclosure && item.enclosure.url && item.enclosure.type.startsWith("image/") ? item.enclosure.url : null
+            const titleVal = item.title || item.link || "Untitled"
+            const contentVal = item.content || item.description || null
+            const summaryVal = item.description || ""
+            const urlVal = item.link || null
+            const authorVal = item.author || null
+
             await db.execute(
               `INSERT INTO posts (id, source_id, title, content, summary, url, author, published_at, image_url)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               [
                 uuidv4(),
                 sourceId,
-                item.title,
-                item.content,
-                item.description || null,
-                item.link,
-                item.author || null,
+                titleVal,
+                contentVal,
+                summaryVal,
+                urlVal,
+                authorVal,
                 publishedAt,
                 imageUrl,
               ]

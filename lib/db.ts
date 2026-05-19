@@ -4,7 +4,7 @@ const connection = mysql.createPool({
   host: process.env.DATABASE_HOST || "localhost",
   user: process.env.DATABASE_USER || "root",
   password: process.env.DATABASE_PASSWORD || "",
-  database: process.env.DATABASE_NAME || "rss_reader",
+  database: process.env.DATABASE_NAME || "rss_reader_v2",
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,

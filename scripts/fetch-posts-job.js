@@ -68,6 +68,11 @@ const parseRSSFeed = async (feedUrl) => {
       cleanUrl = "https://" + cleanUrl
     }
 
+    // If reddit feed, fetch manually to avoid CORS issues and parse the content
+    if (cleanUrl.includes("reddit.com") && cleanUrl.endsWith("/.rss")) {
+      return await parseRedditFeed(cleanUrl)
+    }
+
     const parser = createParser()
     const feed = await parser.parseURL(cleanUrl)
 
@@ -108,6 +113,42 @@ const parseRSSFeed = async (feedUrl) => {
     }
   } catch (error) {
     console.error(`❌ RSS parsing error for: ${feedUrl}`, error.message)
+    return null
+  }
+}
+
+async function parseRedditFeed(feedUrl) {
+  try {
+    console.log(`🔍 Parsing Reddit feed: ${feedUrl}`)
+    const response = await fetch(feedUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; RSS Reader Bot/1.0)",
+        Accept: "application/rss+xml, application/xml, text/xml",
+      },
+    })
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
+    const xmlText = await response.text()
+    const parser = createParser()
+    const feed = await parser.parseString(xmlText)
+    console.log(`✅ Successfully parsed Reddit feed: ${feed.title}`)
+    return {
+      title: cleanText(feed.title || "Unknown Feed"),
+      description: cleanText(feed.description),
+      items: feed.items?.map((item) => ({
+        title: cleanText(item.title || "Untitled"),
+        link: item.link || "",
+        description: getItemDescription(item),
+        content: getItemContent(item),
+        pubDate: getItemPubDate(item),
+        author: getItemAuthor(item),
+        guid: item.guid || item.link,
+        categories: item.categories || [],
+      })) || []
+    }
+  } catch (error) {
+    console.error(`❌ Error parsing Reddit feed: ${feedUrl}`, error)
     return null
   }
 }
@@ -278,7 +319,7 @@ const runFetchJob = async () => {
     console.log("✅ Database connected")
 
     const [sources] = await connection.execute(`
-      SELECT id, feed_url, feedly_id, title as source_title
+      SELECT id, feed_url, feedly_id, title as source_title, website
       FROM rss_sources where last_fetched_at IS NULL OR last_fetched_at < NOW() - INTERVAL 5 MINUTE
       ORDER BY created_at DESC LIMIT 100
     `)
@@ -326,6 +367,15 @@ const runFetchJob = async () => {
           await pool.execute("UPDATE rss_sources SET feed_url = ? WHERE id = ?", [feedUrl, source.id])
           console.log(`✅ Updated feed URL: ${feedUrl}`)
           return { newPosts: 0, updated: 1, error: 0 }
+        }
+
+        // If the website is a YouTube channel, convert it to the corresponding feed URL
+        if (source.website && source.website.includes("youtube.com/playlist")) {
+          const playlistIdMatch = source.website.match(/youtube\.com\/playlist\?list=([a-zA-Z0-9_-]+)/)  
+          if (playlistIdMatch && playlistIdMatch[1]) {
+            feedUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistIdMatch[1]}`
+            console.log(`🔄 Converted YouTube playlist URL to feed URL: ${feedUrl}`)
+          }
         }
 
         const feed = await parseRSSFeed(feedUrl)

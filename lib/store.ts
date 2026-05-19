@@ -14,18 +14,23 @@ interface SearchResult {
   subscribers?: number
 }
 
+interface FollowResult {
+  id: string
+  priority: string
+}
+
 import type { Post as PostType } from "@/lib/types"
 
 interface SearchState {
   query: string
   results: SearchResult[]
   hasSearched: boolean
-  followingIds: Set<string>
+  followingIds: FollowResult[]
   setQuery: (query: string) => void
   setResults: (results: SearchResult[]) => void
   setHasSearched: (hasSearched: boolean) => void
-  setFollowingIds: (ids: Set<string>) => void
-  addFollowingId: (id: string) => void
+  setFollowingIds: (followingIds: FollowResult[]) => void
+  addFollowingId: (id: string, priority: string) => void
   clearSearch: () => void
 }
 
@@ -56,15 +61,15 @@ export const useSearchStore = create<SearchState>((set) => ({
   query: "",
   results: [],
   hasSearched: false,
-  followingIds: new Set<string>(),
+  followingIds: [],
 
   setQuery: (query) => set({ query }),
   setResults: (results) => set({ results }),
   setHasSearched: (hasSearched) => set({ hasSearched }),
-  setFollowingIds: (ids) => set({ followingIds: ids }),
-  addFollowingId: (id) =>
+  setFollowingIds: (followingIds) => set({ followingIds }),
+  addFollowingId: (id: string, priority: string) =>
     set((state) => ({
-      followingIds: new Set([...state.followingIds, id]),
+      followingIds: [...state.followingIds, { id, priority }],
     })),
   clearSearch: () =>
     set({

@@ -78,7 +78,7 @@ export default function SearchPage() {
       const response = await fetch("/api/subscriptions")
       if (response.ok) {
         const data = await response.json()
-        const ids = new Set<string>(data.subscriptions.map((sub: any) => sub.feedly_id as string))
+        const ids = data.subscriptions.map((sub: any) => ({ id: sub.feedly_id, priority: sub.priority }))
         setFollowingIds(ids)
       }
     } catch (error) {
@@ -162,7 +162,10 @@ export default function SearchPage() {
       })
 
       if (response.ok) {
-        addFollowingId(feedId)
+        addFollowingId(feedId, priority)
+        setResults(results.map((r) =>
+          r.feedId === feedId ? { ...r, priority } : r
+        ))
       } else {
         setError("Failed to follow feed. Please try again.")
       }
@@ -174,6 +177,21 @@ export default function SearchPage() {
         newSet.delete(feedId)
         return newSet
       })
+    }
+  }
+
+    // Unfollow a source
+   async function handleUnfollow(feedId: string) {
+    const src = results.find(s => s.feedId === feedId);
+    if (!src) return;
+    const sourceId = src.id || feedId;
+    const res = await fetch(`/api/subscriptions/${encodeURIComponent(sourceId)}`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+        setResults(results.map((r) =>
+          r.feedId === feedId ? { ...r, priority: null } : r
+        ))
     }
   }
 
@@ -298,10 +316,10 @@ export default function SearchPage() {
               key={result.id}
               result={result}
               onFollow={handleFollow}
-              isFollowing={followingIds.has(result.feedId)}
+              isFollowing={followingIds.find((f) => f.id === result.feedId)}
               isLoading={followLoading.has(result.feedId)}
               followPriority={(result as any).priority}
-              onUnfollow={() => {}}
+              onUnfollow={() => handleUnfollow(result.feedId)}
             />
           ))}
         </div>

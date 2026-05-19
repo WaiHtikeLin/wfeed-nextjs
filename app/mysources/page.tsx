@@ -168,7 +168,7 @@ export default function MySourcesPage() {
                 website: source.website_url,
                 iconUrl: source.icon_url,
               }}
-              isFollowing={true}
+              isFollowing={{ id: source.feedly_id, priority: source.priority }}
               isLoading={false}
               onFollow={(_feedId, priority) => handlePriorityChange(source.feedly_id, priority)}
               onUnfollow={() => handleUnfollow(source.feedly_id)}
